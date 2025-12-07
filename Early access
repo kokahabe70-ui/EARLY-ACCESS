@@ -1,0 +1,129 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Debris = game:GetService("Debris")
+
+local LocalPlayer = Players.LocalPlayer
+
+local AnimationsToDetect = {
+    "rbxassetid://138386253518573",
+    "rbxassetid://103905303668499",
+    "rbxassetid://109073770803138",
+    "rbxassetid://105018679651616",
+    "rbxassetid://124853830813308",
+    "rbxassetid://72036716319034",
+    "rbxassetid://83315617640528"
+}
+
+local AnimationIdsSet = {}
+for _, id in AnimationsToDetect do AnimationIdsSet[id] = true end
+
+local Settings = {
+    Enabled = false,
+    Range = 20,
+    HitboxSize = 5,
+    Cooldown = 0.8,
+    ShowHitbox = true
+}
+
+local lastParry = 0
+local connection
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+Rayfield:LoadConfiguration({Theme = "Light"})
+if Rayfield.SetTheme then Rayfield:SetTheme("Light") end
+
+local Window = Rayfield:CreateWindow({
+    Name = "CharmHUB Auto Parry",
+    LoadingTitle = "CharmHUB",
+    LoadingSubtitle = "Free & Public",
+})
+
+local Main = Window:CreateTab("Main")
+local SettingsTab = Window:CreateTab("Settings")
+local Info = Window:CreateTab("Info")
+
+Main:CreateToggle({
+    Name = "Enable Auto Parry",
+    CurrentValue = false,
+    Callback = function(v)
+        Settings.Enabled = v
+        if v then
+            connection = RunService.Heartbeat:Connect(MainLoop)
+            Rayfield:Notify({Title = "CharmHUB", Content = "Auto Parry ON", Duration = 3})
+        else
+            if connection then connection:Disconnect() end
+            Rayfield:Notify({Title = "CharmHUB", Content = "Auto Parry OFF", Duration = 3})
+        end
+    end
+})
+
+SettingsTab:CreateSlider({Name = "Detection Range", Range = {10,50}, Increment = 1, CurrentValue = 20, Callback = function(v) Settings.Range = v end})
+SettingsTab:CreateSlider({Name = "Hitbox Size", Range = {3,15}, Increment = 1, CurrentValue = 5, Callback = function(v) Settings.HitboxSize = v end})
+SettingsTab:CreateSlider({Name = "Cooldown", Range = {0.3,2}, Increment = 0.1, CurrentValue = 0.8, Callback = function(v) Settings.Cooldown = v end})
+SettingsTab:CreateToggle({Name = "Show Hitbox", CurrentValue = true, Callback = function(v) Settings.ShowHitbox = v end})
+
+Info:CreateParagraph({Title = "CharmHUB Free", Content = "No key needed\n7 moves blocked perfectly\n100% undetected\nEnjoy winning"})
+Info:CreateLabel("discord.gg/eRBqcJjuqC")
+
+local function isPlayingBlockedAnim(char)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    local anim = hum:FindFirstChildOfClass("Animator")
+    if not anim then return false end
+    for _, track in anim:GetPlayingAnimationTracks() do
+        if AnimationIdsSet[track.Animation.AnimationId] then return true end
+    end
+    return false
+end
+
+local function createHitbox()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local root = char.HumanoidRootPart
+
+    local size = Vector3.new(Settings.HitboxSize, Settings.HitboxSize, Settings.HitboxSize / 2)
+    local box = Instance.new("Part")
+    box.Name = "CharmHUB_Hitbox"
+    box.Size = size
+    box.Transparency = Settings.ShowHitbox and 0.6 or 1
+    box.Color = Color3.fromRGB(0, 255, 255)
+    box.Material = Enum.Material.ForceField
+    box.CanCollide = false
+    box.Anchored = false
+    box.CFrame = root.CFrame * CFrame.new(0, 0, -(size.Z/2 + 1.5))
+    box.Parent = workspace
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = root
+    weld.Part1 = box
+    weld.Parent = box
+
+    Debris:AddItem(box, 0.5)
+end
+
+local function pressQ()
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+end
+
+function MainLoop()
+    if not Settings.Enabled or tick() - lastParry < Settings.Cooldown then return end
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+
+    for _, plr in Players:GetPlayers() do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local dist = (plr.Character.HumanoidRootPart.Position - myChar.HumanoidRootPart.Position).Magnitude
+            if dist <= Settings.Range and isPlayingBlockedAnim(plr.Character) then
+                createHitbox()
+                pressQ()
+                lastParry = tick()
+                break
+            end
+        end
+    end
+end
+
+Rayfield:Notify({Title = "CharmHUB", Content = "Free version loaded • No key needed", Duration = 8})
